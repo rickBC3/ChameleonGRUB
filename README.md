@@ -1,7 +1,7 @@
 # ChameleonGRUB 🦎
 
 A dynamic GRUB theme shuffler that gives your bootloader a fresh look every time you reboot!
-You can add yourthemes if you download them
+You can add your themes if you download them
 
 
 ## ✨ Features
