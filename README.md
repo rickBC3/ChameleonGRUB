@@ -1,22 +1,55 @@
-3. Usage Examples
-bash
+# ChameleonGRUB 🦎
 
-# Install with 30+ preloaded themes
+A dynamic GRUB theme shuffler that gives your bootloader a fresh look every time you reboot!
+
+
+## ✨ Features
+- **Random Theme Rotation**: New theme on every boot
+- **Preview Mode**: Test themes without rebooting (`--preview`)
+- **Theme Downloads**: Add new themes directly (`--download <URL>`)
+- **Exclusion List**: Block themes you dislike (`exclude.conf`)
+- **30+ Built-in Themes**: From sleek to artistic
+
+## 🛠 Installation
+```bash
+git clone https://github.com/mistra1n/ChameleonGRUB.git
+cd ChameleonGRUB
 sudo ./install.sh
+```
+Verify Permissions:
+Ensure scripts are executable:
+```
+chmod +x install.sh uninstall.sh ChameleonGRUB
+```
+## 🎮 Usage
 
-# Preview next theme
-sudo shuffle-grub-theme --preview
+```python
+Command	                                  Description
+:-------------------- |                | ----------------: |
 
-# Download new theme
-sudo shuffle-grub-theme --download https://gnome-look.org/s/1234
+sudo ChameleonGRUB	                      Apply random theme
 
-# List themes
-sudo shuffle-grub-theme --list
+sudo ChameleonGRUB --preview	              Preview next theme
 
-4. Key Features
+sudo ChameleonGRUB --list	              Show available themes
 
-✅ Theme Previews (--preview)
-✅ Theme Exclusion (/etc/grub-theme-shuffler/exclude.conf)
-✅ One-Click Downloads (--download <URL>)
-✅ CI/CD Tested (GitHub Actions)
-✅ Clean Uninstall
+sudo ChameleonGRUB --download
+https://gnome-look.org/123	              Install new theme
+
+sudo ./uninstall.sh	                      Remove ChameleonGRUB
+```
+
+## 📸 Theme Gallery
+Cyberpunk	Tux	Minimal
+
+## ⚙️ Configuration
+
+Edit /etc/ChameleonGRUB/exclude.conf to block themes:
+```python
+# Example:
+cyberpunk
+tux
+```
+## 📜 License
+This project is licensed under the **GNU GPLv3**.  
+See [LICENSE](LICENSE) for full terms.
