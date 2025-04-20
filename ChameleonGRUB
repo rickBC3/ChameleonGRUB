@@ -1,0 +1,130 @@
+#!/bin/bash
+#
+# GRUB Theme Shuffler
+# Copyright (C) 2024 [Your Name]
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#!/bin/bash
+
+THEMES_DIR="/usr/share/grub/themes"
+GRUB_CONFIG="/etc/default/grub"
+EXCLUDE_FILE="/etc/ChameleonGRUB/exclude.conf"
+VERSION="1.0"
+
+show_help() {
+  echo "ChameleonGRUB v$VERSION - Dynamic GRUB Theme Switcher"
+  echo "Usage:"
+  echo "  --preview       Preview next theme"
+  echo "  --list          List available themes"
+  echo "  --download URL  Install theme from URL"
+  echo "  --version       Show version"
+  echo "  --help          Show this help"
+  exit 0
+}
+
+list_themes() {
+  echo "Available Themes:"
+  find "$THEMES_DIR" -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | while read -r theme; do
+    theme_name=$(basename "$theme")
+    if grep -q "^$theme_name$" "$EXCLUDE_FILE" 2>/dev/null; then
+      echo -e "\e[31m[X] $theme_name (excluded)\e[0m"
+    else
+      echo -e "\e[32m[✓] $theme_name\e[0m"
+    fi
+  done
+  exit 0
+}
+
+download_theme() {
+  [ -z "$1" ] && { echo "Missing URL!" >&2; exit 1; }
+  TEMP_DIR=$(mktemp -d)
+  
+  echo "Downloading theme..."
+  if ! curl -sL "$1" -o "$TEMP_DIR/theme.zip"; then
+    echo "Download failed!" >&2
+    rm -rf "$TEMP_DIR"
+    exit 1
+  fi
+
+  echo "Extracting..."
+  if ! unzip -q "$TEMP_DIR/theme.zip" -d "$TEMP_DIR" 2>/dev/null; then
+    if ! tar -xf "$TEMP_DIR/theme.zip" -C "$TEMP_DIR" 2>/dev/null; then
+      echo "Unsupported archive format. Extract manually to: $THEMES_DIR/" >&2
+      rm -rf "$TEMP_DIR"
+      exit 1
+    fi
+  fi
+
+  THEME_FOLDER=$(find "$TEMP_DIR" -type f -name "theme.txt" -exec dirname {} \; | head -n 1)
+  [ -z "$THEME_FOLDER" ] && { echo "No valid theme found!" >&2; rm -rf "$TEMP_DIR"; exit 1; }
+  
+  THEME_NAME=$(basename "$THEME_FOLDER")
+  mv "$THEME_FOLDER" "$THEMES_DIR/$THEME_NAME"
+  rm -rf "$TEMP_DIR"
+  
+  echo -e "\n✅ Theme installed: \e[1m$THEME_NAME\e[0m"
+  echo "Run 'sudo ChameleonGRUB' to apply it!"
+  exit 0
+}
+
+# Argument parsing
+case "$1" in
+  --preview) PREVIEW=true ;;
+  --list) list_themes ;;
+  --download) download_theme "$2" ;;
+  --version) echo "ChameleonGRUB v$VERSION"; exit 0 ;;
+  --help) show_help ;;
+  "") ;;
+  *) echo "Invalid option: $1" >&2; show_help ;;
+esac
+
+# Main theme selection
+echo "Selecting random theme..."
+THEME_NAME=$(find "$THEMES_DIR" -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | 
+  grep -vFf <(tr '\n' '\0' < "$EXCLUDE_FILE" 2>/dev/null) | 
+  shuf -n 1 | xargs basename)
+
+[ -z "$THEME_NAME" ] && { echo "No themes available!" >&2; exit 1; }
+THEME_PATH="$THEMES_DIR/$THEME_NAME/theme.txt"
+
+# Preview mode
+if [ "$PREVIEW" = true ]; then
+  if command -v zenity &>/dev/null; then
+    zenity --info --text="Next GRUB theme:\n<b>$THEME_NAME</b>\n\nPath: <tt>$THEME_PATH</tt>" \
+           --title="ChameleonGRUB Preview" --width=400
+  else
+    echo -e "Next theme: \e[1m$THEME_NAME\e[0m"
+    echo "Path: $THEME_PATH"
+  fi
+  exit 0
+fi
+
+# Apply theme
+echo "Applying $THEME_NAME..."
+if [ -f "/etc/default/grub.d/kali-themes.cfg" ]; then
+  sed -i 's|GRUB_THEME=.*|GRUB_THEME="'"$THEME_PATH"'"|' /etc/default/grub.d/kali-themes.cfg
+else
+  sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$THEME_PATH\"|" "$GRUB_CONFIG"
+fi
+
+# Update GRUB
+echo "Updating GRUB config..."
+if command -v update-grub &>/dev/null; then
+  update-grub
+else
+  grub-mkconfig -o /boot/grub/grub.cfg
+fi
+
+echo -e "\n✅ Applied: \e[1m$THEME_NAME\e[0m"
+echo "Changes will take effect on next boot!"
