@@ -1,0 +1,129 @@
+#!/bin/bash
+#
+# GRUB Theme Shuffler
+# Copyright (C) 2024 [Your Name]
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#!/bin/bash
+
+THEMES_DIR="/usr/share/grub/themes"
+GRUB_CONFIG="/etc/default/grub"
+EXCLUDE_FILE="/etc/grub-theme-shuffler/exclude.conf"
+
+show_help() {
+  echo "GRUB Theme Shuffler - Usage:"
+  echo "  --preview   : Show next theme without applying"
+  echo "  --list      : List available themes"
+  echo "  --download <URL> : Install theme from URL"
+  echo "  --help      : Show this help"
+}
+
+download_theme() {
+  URL="$1"
+  TEMP_DIR=$(mktemp -d)
+  echo "Downloading theme from $URL..."
+
+  if ! curl -sL "$URL" -o "$TEMP_DIR/theme.zip"; then
+    echo "Download failed!" >&2
+    rm -rf "$TEMP_DIR"
+    exit 1
+  fi
+
+  if ! unzip -q "$TEMP_DIR/theme.zip" -d "$TEMP_DIR" 2>/dev/null; then
+    if ! tar -xf "$TEMP_DIR/theme.zip" -C "$TEMP_DIR" 2>/dev/null; then
+      echo "Unsupported archive format. Extract manually and copy to $THEMES_DIR/" >&2
+      rm -rf "$TEMP_DIR"
+      exit 1
+    fi
+  fi
+
+  THEME_FOLDER=$(find "$TEMP_DIR" -type f -name "theme.txt" -exec dirname {} \; | head -n 1)
+  if [ -z "$THEME_FOLDER" ]; then
+    echo "No valid theme found in archive" >&2
+    rm -rf "$TEMP_DIR"
+    exit 1
+  fi
+
+  THEME_NAME=$(basename "$THEME_FOLDER")
+  mv "$THEME_FOLDER" "$THEMES_DIR/$THEME_NAME"
+  rm -rf "$TEMP_DIR"
+  echo "Theme installed: $THEME_NAME"
+}
+
+list_themes() {
+  echo "Available Themes:"
+  find "$THEMES_DIR" -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | while read -r theme; do
+    theme_name=$(basename "$theme")
+    if grep -q "^$theme_name$" "$EXCLUDE_FILE" 2>/dev/null; then
+      echo "[X] $theme_name (excluded)"
+    else
+      echo "[✓] $theme_name"
+    fi
+  done
+}
+
+# Argument parsing
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --preview)
+      PREVIEW=true
+      shift
+      ;;
+    --list)
+      list_themes
+      exit 0
+      ;;
+    --download)
+      download_theme "$2"
+      exit 0
+      ;;
+    --help)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_help
+      exit 1
+      ;;
+  esac
+done
+
+# Main shuffling logic
+THEME_NAME=$(find "$THEMES_DIR" -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | 
+  grep -vFf <(tr '\n' '\0' < "$EXCLUDE_FILE" 2>/dev/null) | 
+  shuf -n 1 | xargs basename)
+
+[ -z "$THEME_NAME" ] && { echo "No themes available!" >&2; exit 1; }
+THEME_PATH="$THEMES_DIR/$THEME_NAME/theme.txt"
+
+if [ "$PREVIEW" = true ]; then
+  if command -v zenity &>/dev/null; then
+    zenity --info --text="Next GRUB theme:\n$THEME_NAME" --title="Theme Preview"
+  else
+    echo "Next theme: $THEME_NAME"
+  fi
+  exit 0
+fi
+
+# Apply theme
+sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$THEME_PATH\"|" "$GRUB_CONFIG"
+
+if command -v update-grub &>/dev/null; then
+  update-grub
+else
+  grub-mkconfig -o /boot/grub/grub.cfg
+fi
+
+echo "Applied GRUB theme: $THEME_NAME"
